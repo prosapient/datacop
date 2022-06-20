@@ -3,35 +3,31 @@ if Code.ensure_loaded?(Absinthe) do
     @moduledoc """
     Performs authorization for the given resolution.
 
-    With Datacop module we are able to get `{:dataloader, _dataloader_config}` while authorizing, when
-    we work with batched fields. To process result we should accumulate these params for all fields.
-    When the data is ready, we call the appropriated callback and process results
-    to return resolution with either resolved state or Absinthe error.
+    This module helps to build authorization logic for batches, based on [`Dataloader`](https://hexdocs.pm/dataloader/Dataloader.html).
+    Each time the middleware receives `{:dataloader, _dataloader_config}` tuple, it loads(accumulates) data in the `dataloader`
+    struct, in order to run single query in the end. As a result, this middleware returns resolution with either
+    a successfully resolved state or Datacop.UnauthorizedError.
+
+    ## Options
+    * `:loader` - either `dataloader` struct or 1-arity function, which can fetch `dataloader` struct,
+      based on `c:Absinthe.Schema.context/1`. It uses default `Datacop.default_loader/1`, when the option is nil.
+    * `:actor` - the actor struct, which is used in the authorize/3 function for the target module.
+    * `:subject` - the subject struct, which is used in the authorize/3 function for the target module.
+      By default this is resolution.source.
+    * `:callback` - custom function callback, which handles Datacop result.
+
 
     ## Example
     ```elixir
-    middleware(Datacop.AbsintheMiddleware.Authorize, {:view_users, MyApp.MyContext})
-    middleware(Datacop.AbsintheMiddleware.Authorize, {:view_users, MyApp.MyContext, opts})
-    ```
-
-    We also are able to run this middleware from the resolve function, with custom callback fuction:
-
-    ```elixir
-    {:middleware, Datacop.AbsintheMiddleware.Authorize,
+    opts = [
+      loader: &(&1.loader),
+      actor: &(&1.actor),
       callback: fn
         :ok -> {:ok, true)
         error -> {:ok, false}
       end}
-    ```
-
-    In the latter case this middleware uses `Absinthe.Middleware.Dataloader` under the hood for `{:dataloader, _config}`
-    authorization result, and resolve the value with custom callback.
-
-    The source field from resolution is the subject in case of empty subject option.
-
-    You can also pass a function, to fetch loader or actor struct from the resolution.context with options like:
-    ```elixir
-    [actor: &(&1.current_user), loader: &(&1.loader)]
+    ]
+    middleware(Authorize, {MyApp.Blog, :view_stats, opts})
     ```
     """
     @behaviour Absinthe.Middleware
@@ -40,7 +36,7 @@ if Code.ensure_loaded?(Absinthe) do
             actor: (context :: map() -> Datacop.actor()) | Datacop.actor(),
             subject: any(),
             loader: (context :: map() -> Dataloader.t()) | Dataloader.t(),
-            callback: (:ok | {:error, Datacop.UnauthorizedError.t()} -> {:ok, any()} | {:error, map})
+            callback: (:ok | {:error, Datacop.UnauthorizedError.t()} -> {:ok, any()} | {:error, map()})
           ]
 
     @impl Absinthe.Middleware
@@ -79,7 +75,11 @@ if Code.ensure_loaded?(Absinthe) do
           context = Map.put(resolution.context, :loader, loader)
           middleware = [{__MODULE__, on_load} | resolution.middleware]
 
-          %{resolution | state: :suspended, context: context, middleware: middleware}
+          if Dataloader.pending_batches?(loader) do
+            %{resolution | state: :suspended, context: context, middleware: middleware}
+          else
+            resolution
+          end
 
         :ok ->
           resolution
@@ -97,7 +97,11 @@ if Code.ensure_loaded?(Absinthe) do
           context = Map.put(resolution.context, :loader, loader)
           middleware = [{Absinthe.Middleware.Dataloader, {loader, on_load}} | resolution.middleware]
 
-          %{resolution | context: context, middleware: middleware}
+          if Dataloader.pending_batches?(loader) do
+            %{resolution | state: :suspended, context: context, middleware: middleware}
+          else
+            resolution
+          end
 
         result ->
           Absinthe.Resolution.put_result(resolution, resolver.(result))
