@@ -122,6 +122,10 @@ The next example works fine, as `:delete_post` action doesn't use dataloader:
 ```elixir
 Datacop.permit(MyApp.Blog.Policy, :delete_post, actor, subject: post)
 ```
+With `Datacop.permit?/4` it's also possible to work with booleans:
+```elixir
+Datacop.permit?(MyApp.Blog, :search, actor, loader: loader)}
+```
 
 ### Use as Absinthe middleware
 In order to leverage full potential of `datacop` it is recommended to use it with `absinthe`.
