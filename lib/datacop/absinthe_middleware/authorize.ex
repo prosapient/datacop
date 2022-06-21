@@ -97,11 +97,7 @@ if Code.ensure_loaded?(Absinthe) do
           context = Map.put(resolution.context, :loader, loader)
           middleware = [{Absinthe.Middleware.Dataloader, {loader, on_load}} | resolution.middleware]
 
-          if Dataloader.pending_batches?(loader) do
-            %{resolution | state: :suspended, context: context, middleware: middleware}
-          else
-            resolution
-          end
+          %{resolution | context: context, middleware: middleware}
 
         result ->
           Absinthe.Resolution.put_result(resolution, resolver.(result))
