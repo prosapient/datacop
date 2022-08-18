@@ -48,10 +48,44 @@ if Code.ensure_loaded?(Absinthe) do
       subject = Keyword.get(opts, :subject, resolution.source)
       custom_resolver = Keyword.get(opts, :callback)
 
-      action
-      |> module.authorize(actor, subject)
-      |> Datacop.Policy.normalize_output()
-      |> process(resolution, module, custom_resolver, opts)
+      result =
+        action
+        |> module.authorize(actor, subject)
+        |> Datacop.Policy.normalize_output(action)
+
+      case {result, custom_resolver} do
+        {:ok, nil} ->
+          resolution
+
+        {:ok, custom_resolver} ->
+          Absinthe.Resolution.put_result(resolution, custom_resolver.(:ok))
+
+        {{:error, error}, nil} ->
+          Absinthe.Resolution.put_result(resolution, {:error, error})
+
+        {{:error, error}, custom_resolver} ->
+          Absinthe.Resolution.put_result(resolution, custom_resolver.({:error, error}))
+
+        {{:dataloader, %{source_name: source_name, batch_key: batch_key, inputs: inputs} = params}, nil} ->
+          loader = resolution |> get_loader(module, opts) |> Dataloader.load(source_name, batch_key, inputs)
+          on_load = on_load(params, action, opts)
+          context = Map.put(resolution.context, :loader, loader)
+          middleware = [{__MODULE__, on_load} | resolution.middleware]
+
+          if Dataloader.pending_batches?(loader) do
+            %{resolution | state: :suspended, context: context, middleware: middleware}
+          else
+            resolution
+          end
+
+        {{:dataloader, %{source_name: source_name, batch_key: batch_key, inputs: inputs} = params}, _custom_resolver} ->
+          loader = resolution |> get_loader(module, opts) |> Dataloader.load(source_name, batch_key, inputs)
+          on_load = on_load(params, action, opts)
+          context = Map.put(resolution.context, :loader, loader)
+          middleware = [{Absinthe.Middleware.Dataloader, {loader, on_load}} | resolution.middleware]
+
+          %{resolution | context: context, middleware: middleware}
+      end
     end
 
     @impl Absinthe.Middleware
@@ -67,50 +101,13 @@ if Code.ensure_loaded?(Absinthe) do
     @impl Absinthe.Middleware
     def call(resolution, _params), do: resolution
 
-    defp process(result, resolution, module, resolver, opts) when is_nil(resolver) do
-      case result do
-        {:dataloader, %{source_name: source_name, batch_key: batch_key, inputs: inputs}} ->
-          loader = resolution |> get_loader(module, opts) |> Dataloader.load(source_name, batch_key, inputs)
-          on_load = on_load(source_name, batch_key, inputs, opts)
-          context = Map.put(resolution.context, :loader, loader)
-          middleware = [{__MODULE__, on_load} | resolution.middleware]
-
-          if Dataloader.pending_batches?(loader) do
-            %{resolution | state: :suspended, context: context, middleware: middleware}
-          else
-            resolution
-          end
-
-        :ok ->
-          resolution
-
-        error ->
-          Absinthe.Resolution.put_result(resolution, error)
-      end
-    end
-
-    defp process(result, resolution, module, resolver, opts) when not is_nil(resolver) do
-      case result do
-        {:dataloader, %{source_name: source_name, batch_key: batch_key, inputs: inputs}} ->
-          loader = resolution |> get_loader(module, opts) |> Dataloader.load(source_name, batch_key, inputs)
-          on_load = on_load(source_name, batch_key, inputs, opts)
-          context = Map.put(resolution.context, :loader, loader)
-          middleware = [{Absinthe.Middleware.Dataloader, {loader, on_load}} | resolution.middleware]
-
-          %{resolution | context: context, middleware: middleware}
-
-        result ->
-          Absinthe.Resolution.put_result(resolution, resolver.(result))
-      end
-    end
-
-    defp on_load(source_name, batch_key, inputs, opts) do
+    defp on_load(%{source_name: source_name, batch_key: batch_key, inputs: inputs}, action, opts) do
       callback = Keyword.get(opts, :callback, &Function.identity/1)
 
       fn loader ->
         loader
         |> Dataloader.get(source_name, batch_key, inputs)
-        |> Datacop.Policy.normalize_output()
+        |> Datacop.Policy.normalize_output(action)
         |> callback.()
       end
     end

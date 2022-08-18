@@ -43,10 +43,10 @@ defmodule Datacop do
         |> Dataloader.load(source_name, batch_key, inputs)
         |> Dataloader.run()
         |> Dataloader.get(source_name, batch_key, inputs)
-        |> Datacop.Policy.normalize_output()
+        |> Datacop.Policy.normalize_output(action)
 
       result ->
-        Datacop.Policy.normalize_output(result)
+        Datacop.Policy.normalize_output(result, action)
     end
   end
 

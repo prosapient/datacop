@@ -60,24 +60,27 @@ defmodule DatacopTest do
   end
 
   test "permit/5", %{loader: loader, user1: user1, user2: user2} do
-    reason = %Datacop.UnauthorizedError{message: "Unauthorized"}
+    reason = fn action -> %Datacop.UnauthorizedError{message: "Unauthorized", action: action} end
 
     assert :ok = Datacop.permit(Accounts, :view_true, user1)
-    assert {:error, ^reason} = Datacop.permit(Accounts, :view_false, user1)
+    assert {:error, reason.(:view_false)} == Datacop.permit(Accounts, :view_false, user1)
     assert :ok = Datacop.permit(Accounts, :view_ok, user1)
-    assert {:error, ^reason} = Datacop.permit(Accounts, :view_error, user1)
+    assert {:error, reason.(:view_error)} == Datacop.permit(Accounts, :view_error, user1)
 
     assert :ok = Datacop.permit(Accounts, :view_dataloader, user1, subject: 1)
-    assert {:error, ^reason} = Datacop.permit(Accounts, :view_dataloader, user1, subject: 2)
+    assert {:error, reason.(:view_dataloader)} == Datacop.permit(Accounts, :view_dataloader, user1, subject: 2)
     assert :ok = Datacop.permit(Accounts, :view_dataloader, user1, subject: 3)
 
     assert :ok = Datacop.permit(Accounts, :view_dataloader, user1, subject: 1, loader: loader)
-    assert {:error, ^reason} = Datacop.permit(Accounts, :view_dataloader, user1, subject: 2, loader: loader)
+
+    assert {:error, reason.(:view_dataloader)} ==
+             Datacop.permit(Accounts, :view_dataloader, user1, subject: 2, loader: loader)
+
     assert :ok = Datacop.permit(Accounts, :view_dataloader, user1, subject: 3, loader: loader)
 
-    assert {:error, ^reason} = Datacop.permit(Accounts, :view_dataloader, user2, subject: 1)
+    assert {:error, reason.(:view_dataloader)} == Datacop.permit(Accounts, :view_dataloader, user2, subject: 1)
     assert :ok = Datacop.permit(Accounts, :view_dataloader, user2, subject: 2)
-    assert {:error, ^reason} = Datacop.permit(Accounts, :view_dataloader, user2, subject: 3)
+    assert {:error, reason.(:view_dataloader)} == Datacop.permit(Accounts, :view_dataloader, user2, subject: 3)
   end
 
   test "permit?/5", %{loader: loader, user1: user1, user2: user2} do
