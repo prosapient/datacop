@@ -4,7 +4,7 @@ defmodule Datacop.MixProject do
   def project do
     [
       app: :datacop,
-      version: "0.1.2",
+      version: "0.1.3",
       elixir: "~> 1.10",
       description: description(),
       package: package(),
