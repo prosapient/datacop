@@ -1,4 +1,5 @@
 # Datacop
+[![Hex.pm](https://img.shields.io/hexpm/v/datacop.svg)](https://hex.pm/packages/datacop)
 
 An authorization library with Dataloader and Absinthe support.
 
@@ -17,6 +18,7 @@ def deps do
   ]
 end
 ```
+Documentation can be found at [https://hexdocs.pm/datacop](https://hexdocs.pm/datacop).
 
 ## Usage
 ### Define a Policy module with authorization rules
