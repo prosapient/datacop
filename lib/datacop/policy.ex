@@ -48,9 +48,12 @@ defmodule Datacop.Policy do
               :ok | {:error, String.Chars.t()} | boolean() | dataloader_result()
 
   @doc false
-  def normalize_output(:ok), do: :ok
-  def normalize_output(true), do: :ok
-  def normalize_output(false), do: {:error, %Datacop.UnauthorizedError{}}
-  def normalize_output({:error, reason}), do: {:error, %Datacop.UnauthorizedError{message: to_string(reason)}}
-  def normalize_output({:dataloader, opts}), do: {:dataloader, opts}
+  def normalize_output(:ok, _action), do: :ok
+  def normalize_output(true, _action), do: :ok
+  def normalize_output(false, action), do: {:error, %Datacop.UnauthorizedError{meta: %{action: action}}}
+
+  def normalize_output({:error, reason}, action),
+    do: {:error, %Datacop.UnauthorizedError{message: to_string(reason), meta: %{action: action}}}
+
+  def normalize_output({:dataloader, opts}, _action), do: {:dataloader, opts}
 end

@@ -1,4 +1,4 @@
 defmodule Datacop.UnauthorizedError do
   @type t :: Exception.t()
-  defexception message: "Unauthorized"
+  defexception message: "Unauthorized", meta: %{}
 end
