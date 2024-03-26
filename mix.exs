@@ -4,7 +4,7 @@ defmodule Datacop.MixProject do
   def project do
     [
       app: :datacop,
-      version: "0.1.3",
+      version: "0.1.4",
       elixir: "~> 1.10",
       description: description(),
       package: package(),
@@ -37,7 +37,7 @@ defmodule Datacop.MixProject do
 
   defp deps do
     [
-      {:dataloader, "~> 1.0"},
+      {:dataloader, "~> 1.0 or ~> 2.0"},
       {:absinthe, "~> 1.6", optional: true},
       {:ex_doc, "~> 0.24", only: :dev, runtime: false}
     ]
